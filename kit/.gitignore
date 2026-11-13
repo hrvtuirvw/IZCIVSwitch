@@ -7,6 +7,8 @@ node_modules/
 
 # ---- 运行产物 / 固件 dump（体积大且含本机数据，绝不入库）----
 port/engine/dumps/
+port/engine/runs/
+sd-probe-results/
 *.log
 *.tmp
 
@@ -18,3 +20,7 @@ save-tools/backups/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ---- GUI 本机状态 ----
+kit-gui-config.json
+kit-gui-history.json

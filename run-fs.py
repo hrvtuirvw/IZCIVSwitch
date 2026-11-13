@@ -271,7 +271,7 @@ class Engine:
                       % (self.kit / "port" / "engine" / "rpc.cjs", self.run_folder), flush=True)
                 print("[run] live log: tail -f %s/run.log"
                       % self.run_folder, flush=True)
-                print("[run] FS log:   tail -f %s/switch2/acquisition.log"
+                print("[run] FS log:   latest attempt listed in %s/switch2/acquisition-supervisor.json"
                       % self.run_folder, flush=True)
             if line.startswith("Waiting for "):
                 self.listening.set()
@@ -314,7 +314,7 @@ def print_status(engine: Engine, kit: Path, console_ip: str) -> None:
     print("  run folder : %s" % run)
     print("  bridge     : %s:%d" % (console_ip, LOADER_PORT))
     print("  RPC        : node %s %s status" % (kit / "port" / "engine" / "rpc.cjs", run))
-    print("  keep this process running; Ctrl-C releases the endpoint and cleans up")
+    print("  keep this process running; Ctrl-C requests release and cleanup (check the run summary)")
     print("=" * 72)
     print()
     status = run / "switch2" / "fs-execution-current.json"
@@ -348,8 +348,26 @@ def rpc_status(run_dir: Path) -> dict:
         return {"error": str(exc)}
 
 
+def acquisition_log(run_dir: Path) -> Path | None:
+    folder = run_dir / "switch2"
+    supervisor = folder / "acquisition-supervisor.json"
+    if not supervisor.exists():
+        return folder / "acquisition.log"  # pre-v1.0.3 kit compatibility
+    if supervisor.is_symlink() or not supervisor.is_file():
+        return None
+    try:
+        attempts = json.loads(supervisor.read_text(encoding="utf-8")).get("attempts", [])
+        name = Path(attempts[-1]["log"])
+        if (name.parent.resolve() == folder.resolve() and not name.is_symlink()
+                and re.fullmatch(r"acquisition-\d+-\d+-[1-3]\.log", name.name)):
+            return name
+    except (OSError, ValueError, KeyError, IndexError, TypeError):
+        pass
+    return None
+
+
 class Monitor:
-    """Tail the kit's own run.log/acquisition.log and surface compact progress."""
+    """Tail the kit's run.log and live versioned acquisition attempt log."""
 
     def __init__(self, engine: Engine, stall_seconds: float, stall_exit: float,
                  max_runtime: float) -> None:
@@ -364,6 +382,7 @@ class Monitor:
         self.profiles = 0
         self.attempt = 0
         self.acq_inode: int | None = None
+        self.acq_path: Path | None = None
         self.started = time.time()
         self.last_progress = time.time()
         self.last_heartbeat = 0.0
@@ -391,24 +410,25 @@ class Monitor:
                     path = self.run_dir / "run.log"
                     if path.is_file():
                         run_log = path.open("r", encoding="utf-8", errors="replace")
-                # acquire.cjs deletes and recreates acquisition.log for every
-                # internal attempt (up to 3 x 10 min). Follow the path, not the
-                # old inode, otherwise the monitor goes blind after ~10 min.
-                acq_path = self.run_dir / "switch2" / "acquisition.log"
+                # v1.0.3 writes one live log per attempt; acquisition.log is
+                # only a copy made AFTER an attempt fails. Follow the pinned
+                # supervisor's newest log, not that stale compatibility copy.
+                acq_path = acquisition_log(self.run_dir)
                 try:
-                    acq_stat = acq_path.stat()
+                    acq_stat = acq_path.stat() if acq_path is not None else None
                 except OSError:
                     acq_stat = None
-                if acq_stat is not None and acq_stat.st_ino != self.acq_inode:
+                if acq_stat is not None and (acq_stat.st_ino != self.acq_inode or
+                                             acq_path != self.acq_path):
                     if acq_log is not None:
                         acq_log.close()
                     acq_log = acq_path.open("r", encoding="utf-8", errors="replace")
                     self.acq_inode = acq_stat.st_ino
+                    self.acq_path = acq_path
                     self.attempt += 1
                     self.last_progress = time.time()
                     if self.attempt > 1:
-                        print("[fs] acquisition attempt %d/3 (log restarted; "
-                              "the previous 10-minute window was abandoned)" % self.attempt,
+                        print("[fs] acquisition attempt %d/3 (new source-owned log)" % self.attempt,
                               flush=True)
                 moved = False
                 for stream, prefix in ((run_log, "[run] "), (acq_log, "[fs] ")):
@@ -434,7 +454,11 @@ class Monitor:
                     self.last_heartbeat = now
                     self._heartbeat()
                 quiet = now - self.last_progress
-                if self.stall_seconds > 0 and quiet >= self.stall_seconds and not self.warned:
+                # Acquisition deadlines must not retire a successfully held FS
+                # endpoint. After 4/4, only operator release, console disconnect
+                # or an actual engine exit ends the session.
+                acquiring = not self.engine.ready.is_set()
+                if acquiring and self.stall_seconds > 0 and quiet >= self.stall_seconds and not self.warned:
                     self.warned = True
                     print(
                         "[fs] WARNING: no acquisition progress for %d s. The kit treats a wedged "
@@ -442,11 +466,11 @@ class Monitor:
                         % quiet,
                         flush=True,
                     )
-                if self.stall_exit > 0 and quiet >= self.stall_exit and not self.engine.stalled:
+                if acquiring and self.stall_exit > 0 and quiet >= self.stall_exit and not self.engine.stalled:
                     self.engine.stalled = True
                     print("[fs] stall limit reached; stopping the engine", flush=True)
                     self.engine.stop()
-                if (self.max_runtime > 0 and not self.engine.stalled
+                if (acquiring and self.max_runtime > 0 and not self.engine.stalled
                         and now - self.started >= self.max_runtime):
                     self.engine.stalled = True
                     print("[fs] global runtime limit (%d s) reached; stopping the engine"
@@ -546,8 +570,8 @@ def print_summary(run_folder: str | None) -> None:
                      (data.get("cleanup") or {}).get("deferred")))
         except ValueError:
             pass
-    acquisition = run / "switch2" / "acquisition.log"
-    if acquisition.is_file():
+    acquisition = acquisition_log(run)
+    if acquisition is not None and acquisition.is_file():
         errors = []
         retries = []
         with acquisition.open("r", encoding="utf-8", errors="replace") as stream:
@@ -575,9 +599,9 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "examples:\n"
-            "  python3 run-fs.py --lobby\n"
-            "  python3 run-fs.py --no-lobby --console-ip 10.42.0.20\n"
-            "  python3 run-fs.py --lobby --dump-firmware --yes\n"
+            "  python3 IZCIVSwitch.py --lobby --yes\n"
+            "  python3 IZCIVSwitch.py --no-lobby --console-ip <S2-IP>\n"
+            "  python3 IZCIVSwitch.py --lobby --dump-firmware --yes\n"
         ),
     )
     parser.add_argument("--lobby", dest="lobby", action="store_true", default=True,
@@ -595,11 +619,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="inject through the Lobby and stop once the loader answers (for install.py)")
     parser.add_argument("--inspect", metavar="RUN", help="print a summary of an existing run folder and exit")
     parser.add_argument("--stall-seconds", type=float, default=180.0,
-                        help="warn when acquisition.log stops growing for this long (0 disables)")
+                        help="warn when the current acquisition attempt log stops growing (0 disables)")
     parser.add_argument("--stall-exit", type=float, default=0.0,
                         help="stop the engine after this much silence (0 keeps it running)")
     parser.add_argument("--max-runtime", type=float, default=720.0,
-                        help="global limit in seconds; default 720 (one full 10-minute window); 0 disables")
+                        help="acquisition limit in seconds; default 720; disabled after FS 4/4; 0 disables")
     parser.add_argument("--wait", type=float, default=240.0, help="seconds to wait for the loader")
     parser.add_argument("--ready-timeout", type=float, default=0.0, help="seconds to wait for 4/4 verified (0 = only --max-runtime)")
     parser.add_argument("--kit", type=Path, default=DEFAULT_KIT)
@@ -644,7 +668,7 @@ def main(argv: list[str] | None = None) -> int:
         print("One-time trigger install:")
         print("  python3 kit/save-tools/restore_save.py kit/save-tools/trigger-recreate %s" % console_ip)
         print("Then hard-power-cycle S2 and use: Load Game -> XSTRIG -> "
-              "python3 run-fs.py --no-lobby")
+              "python3 IZCIVSwitch.py --no-lobby")
         print("Optional launcher install: python3 izlauncher/install.py --ip %s" % console_ip)
         return 0
 

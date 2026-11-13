@@ -14,7 +14,7 @@ Typical use:
   2. PC: python3 pc-install-trigger.py --yes
   3. Hard power-cycle S2 (12 s)
   4. Civ7 -> Load Game -> XSTRIG.Civ7Save -> Awaiting payload
-  5. Run the original kit engine + bridge (see the printed commands)
+  5. PC: python3 IZCIVSwitch.py --no-lobby
 """
 from __future__ import annotations
 
@@ -68,15 +68,6 @@ def inspect_ldn(panel: Path) -> dict:
     return json.loads(result.stdout.strip().splitlines()[-1])
 
 
-def local_ip_towards(host: str) -> str:
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.connect((host, LOADER_PORT))
-            return sock.getsockname()[0]
-    except OSError:
-        return "10.42.0.1"
-
-
 def neighbor_ipv4() -> list[str]:
     try:
         out = subprocess.run(["ip", "-4", "neigh", "show"], text=True, capture_output=True).stdout
@@ -118,6 +109,21 @@ def wait_loader(hosts: list[str], seconds: float) -> str:
         print("  ... no loader yet", flush=True)
         time.sleep(3)
     die("loader did not answer. Check that S2 is in Civ7 Host Lobby and keep it open.")
+
+
+def show_installed_next_steps(console_ip: str) -> None:
+    """Point a successful install at the supported wrapper, not manual kit commands."""
+    print()
+    print("=" * 72)
+    print("XSTRIG TRIGGER INSTALLED")
+    print("=" * 72)
+    print("1. Hard power-cycle S2: hold power for 12 seconds, wait 5 s, boot.")
+    print("2. Civ7 -> Load Game -> XSTRIG.Civ7Save.")
+    print("3. Wait for: Awaiting payload at %s:%d" % (console_ip, LOADER_PORT))
+    print("4. From this extracted IZCIVSwitch folder, run:")
+    print("     python3 IZCIVSwitch.py --no-lobby --console-ip %s" % console_ip)
+    print("Keep the launcher open to hold FS; Ctrl-C releases it.")
+    print("Switch 1 and the Lobby are no longer needed after this.")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -218,23 +224,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     if result.returncode != 0:
         die("restore_save.py failed with exit code %d" % result.returncode)
-    print()
-    print("=" * 72)
-    print("XSTRIG TRIGGER INSTALLED")
-    print("=" * 72)
-    print("1. Hard power-cycle S2: hold power for 12 seconds, wait 5 s, boot.")
-    print("2. Civ7 -> Load Game -> XSTRIG.Civ7Save.")
-    print("3. Wait for: Awaiting payload at <S2-IP>:9026")
-    pc_ip = local_ip_towards(console_ip)
-    print("4. Point the original bridge at this PC (equivalent of set-pc-ip.ps1):")
-    print("     cd %s" % kit)
-    print("     sed -i \"s/PC_IP: '<PC_IP>'/PC_IP: '%s'/\" port/civ_bridge.js" % pc_ip)
-    print("5. Run the original kit engine, then send the bridge from a second terminal:")
-    print("     node port/engine/run.cjs %s" % pc_ip)
-    print("     # second terminal:")
-    print("     python3 save-tools/send_js.py %s port/civ_bridge.js" % console_ip)
-    print()
-    print("Switch 1 and the Lobby are no longer needed after this.")
+    show_installed_next_steps(console_ip)
     return 0
 
 

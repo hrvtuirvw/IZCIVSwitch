@@ -119,8 +119,7 @@ receipt says so.
   protocol: files on the mock were byte-identical, and rollback restored the
   previous trigger with a matching SHA-256.
 - The installer was run on hardware with the 0.22 package (`INSTALL DONE`,
-  menu loaded). The 0.27 package was verified through the mock install path;
-  the double-R3 loader gesture has not yet been hardware-tested.
+  menu loaded). The 0.27 package was checked through the mock install and rollback path.
 
 ## Limitations
 

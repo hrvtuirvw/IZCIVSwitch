@@ -176,7 +176,6 @@ cleanly.** Save-health signal: a win within the first ~10 positive waves.
 ## 5. Layout
 
 - `BRIDGE-CONTRACT.md` — the loader↔engine bridge protocol.
-- `PORT-HANDOFF.md` — runbook (addresses redacted).
 - `port/APP-OFFSETS-REPORT.md`, `port/CORE-OFFSETS-REPORT.md`,
   `port/MOUNT-OFFSETS-REPORT.md`, `port/RESIDUAL-OFFSETS-REPORT.md` — offset tables + runtime results.
 - `port/PORT-FS-REQUIREMENTS.md`, `port/PORT-APP-LAYER.md` — requirements/design.

@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $bridge = Join-Path $PSScriptRoot 'port\civ_bridge.js'
 if (-not (Test-Path $bridge)) { throw "not found: $bridge" }
-$text = Get-Content $bridge -Raw
+$text = Get-Content $bridge -Raw -Encoding UTF8
 if ($text -notmatch "'<PC_IP>'") {
   Write-Output 'PC_IP already set; overwriting any previous value.'
   $text = [regex]::Replace($text, "PC_IP:\s*'[^']*'", "PC_IP: '$PcIp'")

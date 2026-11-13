@@ -1,5 +1,7 @@
 # Console keys, installed runtime, and machine-specific state
 /panel/data/
+/kit/port/engine/runs/
+/kit/port/engine/dumps/
 
 # Python bytecode
 __pycache__/

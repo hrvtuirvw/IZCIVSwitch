@@ -1,45 +1,19 @@
-# Safety notice
+# Safety notice / 安全上の注意
 
-This is research software for a Nintendo Switch 2 that you own. It exercises a
-known Civ7 JavaScript-XSS chain and the ns2jb Stage 2 FS race. Read this before
-running anything.
+## English
 
-## What it writes
+Back up your Civ7 saves before running FS acquisition. The process writes temporary data under `save:/` and may freeze the console. The optional XSTRIG and IZlauncher installers also write loader saves.
 
-- `save:/saves/Single/XSTRIG.Civ7Save` (optional trigger install)
-- `save:/IZ2SOffline/<uuid>/` (installer backup/staging)
-- `save:/IZ2S/...` (optional IZlauncher menu and its capsule)
-- `save:/NS2_GAP_*` and related scratch during the FS race
+If a run fails, keep its run folder and cleanup record. Do not start a second manual acquisition on the same boot or delete SAVE entries by name pattern. On a separate full boot, verify and handle only paths proven to belong to that run. Do not run two acquisition engines at once or repeat an operation with an uncertain result.
 
-The engine attempts to restore instructions and remove scratch. It does not
-provide transactional backups. A crash or power loss can leave the console in
-an unknown state.
+Supply your own `prod.keys` for PC Lobby mode; keys are not distributed. The software is provided without warranty.
 
-## Failure modes
+---
 
-- The FS race is probabilistic. A failed attempt can wedge the console.
-- A wedged console requires a hard power-cycle: hold power for 12 seconds.
-- The initial Civ7 JS exploit can fail before the loader opens `:9026`
-  (`Got unstable rw primitive`, errors `604:48` / `657:28`).
-- An uncertain native operation must not be replayed. Restart the console
-  before trying again.
-- Do not run two engines or two Lobby injectors at once.
+## 日本語
 
-## Keys
+FS取得前にCiv7のセーブをバックアップする。処理中は `save:/` に一時データを書き込み、本体が固まる場合がある。任意のXSTRIG・IZlauncher導入もローダー用のセーブを書き込む。
 
-`prod.keys` is a console-specific secret. The release archive does **not**
-contain it. Put your own dump at:
+失敗したらrunフォルダーと片付けの記録を残す。同じ起動中に手動で再取得せず、名前のパターンだけでSAVEを消さない。別のフル起動後、そのrunが作成したと証明できるパスだけを照合・処理する。取得エンジンの同時起動や結果の不明な操作の再送もしない。
 
-```
-panel/data/private/civswitchldn/prod.keys
-```
-
-Never commit it, publish it, or share a live run folder. Never download keys
-from untrusted sources.
-
-## Scope
-
-Use only hardware and content you are authorized to access. Do not use this on
-other people's devices or in online play. No Nintendo branding or game assets
-are included. The software is provided without warranty; you are responsible
-for the operations you choose.
+PC Lobbyには自分の `prod.keys` を用意する。鍵は配布物に含まれない。ソフトウェアは無保証で提供する。

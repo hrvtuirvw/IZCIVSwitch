@@ -3,7 +3,7 @@
 Goal: run the ns2jb (kurumuz fork) PC engine against **Civ 7 via CivSwitch** instead of
 SmileBASIC 4, so the fs-process exploit (stage 2+) runs from the Civ7 process.
 
-- Workspace root: `C:\Users\mike\Documents\kimi\tasks\2026-11-01\18-11-15-7ce4f4b7`
+- Workspace root: `<dev-workspace>`
 - ns2jb reference source (DO NOT MODIFY, keep pristine): `ns2jb-main/`
 - New port files go in `port/`
 - Civ7 sdk module dump: `dump/` (files named by runtime base address, hex)

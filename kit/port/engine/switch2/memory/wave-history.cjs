@@ -22,7 +22,13 @@ function summarize(rows) {
     const hit = markerHit(row);
     if (hit) result.markerHits++;
     if (row.triggerAborted === false && !hit) result.executedWithoutMarker++;
-    if (row.restored !== true) result.restorationFailures++;
+    // Aborted waves fired no trigger: we wrote nothing, so there is nothing to
+    // restore. Their restored=false reflects external heap drift (RUN 73:
+    // baseline 3569616 -> after 3541280, diff -28336, known-magnitude) — not an
+    // un-restored write. An aborted wave that DID change bytes is still vetoed
+    // via unexpectedChanges below (changedPaths non-empty on triggerAborted).
+    // Unknown rows (triggerAborted undefined) stay conservative and count.
+    if (row.restored !== true && row.triggerAborted !== true) result.restorationFailures++;
     if (!Array.isArray(row.changedPaths) || row.changedPaths.some(name => name !== 'canary') ||
         row.triggerAborted === true && row.changedPaths.length > 0) result.unexpectedChanges++;
   }

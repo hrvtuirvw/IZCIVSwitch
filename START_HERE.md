@@ -1,59 +1,75 @@
-# START HERE
+# Start here / 最初に読む
 
-Everything is in this folder. Installation is four steps.
+[English](#english) · [日本語](#日本語)
 
-## 1. Extract
+## English
 
-Extract the whole archive to a writable folder. Do not run from inside the archive.
+These steps are for the **Linux x86_64 full archive** and PC Lobby mode. The
+[source ZIP](README.md#package-contents) needs a compatible external `--panel` for Lobby mode.
 
-## 2. Put your `prod.keys` in the right folder
+1. Back up your saves. Verify `IZCIVSwitch-0.2.0-rc.19-linux-x86_64.tar.gz` against
+   `IZCIVSwitch-0.2.0-rc.19-assets.sha256` in the download directory, then extract the whole
+   archive into a writable folder and enter `IZCIVSwitch-0.2.0-rc.19`.
+2. Put your own text `prod.keys` in `panel/data/private/civswitchldn/prod.keys` (not supplied).
+   Prepare and check the runtime:
 
-The archive does **not** include keys. The PC Lobby injector needs your own
-console dump at exactly:
+   ```bash
+   chmod 700 panel/data/private/civswitchldn
+   chmod 600 panel/data/private/civswitchldn/prod.keys
+   sudo setcap cap_net_admin,cap_net_raw=ep panel/data/runtime/civswitchldn/bin/python-ldn
+   getcap panel/data/runtime/civswitchldn/bin/python-ldn
+   python3 pc-install-trigger.py --check
+   ```
 
-```
-panel/data/private/civswitchldn/prod.keys
-```
+   Expect `cap_net_admin,cap_net_raw=ep` and `[ok] LDN environment is ready`.
+3. On Switch 2, open **Civ7 → MULTIPLAYER → WIRELESS → CREATE GAME → HOST LOBBY**. On the PC:
+   `python3 IZCIVSwitch.py --lobby --yes`.
+4. Wait for **both** `4/4 verified` and `FS ENDPOINT IS LIVE`. Keep the game and launcher running.
+   Copy the **current** `run folder :` path printed by the launcher into a second terminal:
 
-```bash
-chmod 700 panel/data/private/civswitchldn
-chmod 600 panel/data/private/civswitchldn/prod.keys
-```
+   ```bash
+   RUN='/absolute/path/to/current/run'
+   node civ-locale.cjs inspect "$RUN"
+   node civ-locale.cjs set "$RUN" --language ko
+   ```
 
-The file must be a text `prod.keys` dump and contain at least
-`aes_kek_generation_source`, `aes_key_generation_source`, `master_key_00`,
-`master_key_12` (each 32 hex characters).
+   Replace the sample path with the current run path. For other languages and restoration, read [Language settings](docs/MULTILINGUAL.md).
 
-If you do not have `prod.keys`, skip the Lobby path: use the Switch 1 NRO from
-the original kit to install `XSTRIG.Civ7Save`, then use `IZCIVSwitch.py --no-lobby`.
+If acquisition fails, follow [Recovery](README.md#recovery-after-a-failed-attempt).
 
-## 3. Restore capabilities
+---
 
-```bash
-sudo setcap cap_net_admin,cap_net_raw=ep \
-  panel/data/runtime/civswitchldn/bin/python-ldn
-getcap panel/data/runtime/civswitchldn/bin/python-ldn
-```
+## 日本語
 
-Expected: `cap_net_admin,cap_net_raw=ep`.
+以下は**Linux x86_64フル版**でPCからLobbyへ注入する手順。
+[ソースZIP](README.md#配布ファイル)でLobbyを使う場合は互換性のある外部 `--panel` が必要。
 
-## 4. Verify and launch
+1. 先にセーブをバックアップ。ダウンロード先で `IZCIVSwitch-0.2.0-rc.19-linux-x86_64.tar.gz` を
+   `IZCIVSwitch-0.2.0-rc.19-assets.sha256` と照合してから、アーカイブを丸ごと書込み可能なフォルダーに展開し、
+   `IZCIVSwitch-0.2.0-rc.19` に入る。
+2. 自分のテキスト形式の `prod.keys` を `panel/data/private/civswitchldn/prod.keys` に置く（同梱なし）。
+   ランタイムを準備・確認する。
 
-```bash
-python3 pc-install-trigger.py --check
-```
+   ```bash
+   chmod 700 panel/data/private/civswitchldn
+   chmod 600 panel/data/private/civswitchldn/prod.keys
+   sudo setcap cap_net_admin,cap_net_raw=ep panel/data/runtime/civswitchldn/bin/python-ldn
+   getcap panel/data/runtime/civswitchldn/bin/python-ldn
+   python3 pc-install-trigger.py --check
+   ```
 
-Expected: `[ok] LDN environment is ready`.
+   `cap_net_admin,cap_net_raw=ep` と `[ok] LDN environment is ready` を確認。
+3. Switch 2で **Civ7 → MULTIPLAYER → WIRELESS → CREATE GAME → HOST LOBBY** を開く。
+   PCで `python3 IZCIVSwitch.py --lobby --yes` を実行。
+4. **`4/4 verified` と `FS ENDPOINT IS LIVE` の両方**を待つ。
+   ゲームとランチャーを止めず、表示された**今回の** `run folder :` のパスを別端末の `RUN` に指定する。
 
-On S2: Civ7 → `MULTIPLAYER > WIRELESS > CREATE GAME > HOST LOBBY`.
+   ```bash
+   RUN='/absolute/path/to/current/run'
+   node civ-locale.cjs inspect "$RUN"
+   node civ-locale.cjs set "$RUN" --language ko
+   ```
 
-On the PC:
+   `RUN` に今回のパスを入れる。ほかの言語と復元は[言語設定手順](docs/MULTILINGUAL.md)へ。
 
-```bash
-python3 IZCIVSwitch.py --lobby --yes
-```
-
-Success: `4/4 verified` and `FS ENDPOINT IS LIVE`.
-
-Read `README.md` for the persistent XSTRIG mode, the optional IZlauncher menu,
-monitoring, troubleshooting and safety notes.
+FS取得に失敗した場合は[失敗後の対応](README.md#失敗後の対応)へ。

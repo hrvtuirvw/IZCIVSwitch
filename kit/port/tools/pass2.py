@@ -5,7 +5,7 @@ import json, os
 import numpy as np
 from capstone import Cs, CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN
 
-ROOT = r"C:\Users\mike\Documents\kimi\tasks\2026-11-01\18-11-15-7ce4f4b7"
+ROOT = r"<PATH-TO-WORKSPACE>"
 text = open(os.path.join(ROOT, "dump", "4e102a4000.bin"), "rb").read()
 words = np.frombuffer(text, dtype=np.uint32)
 md = Cs(CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN)

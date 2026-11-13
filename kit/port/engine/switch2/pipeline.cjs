@@ -2,11 +2,13 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const {a} = require('../shared/rpc.cjs');
 const {run} = require('../shared/stages.cjs');
-const {connect} = require('./tools/fs-memory.cjs');
+const {connect, encodeU64} = require('./tools/fs-memory.cjs');
 const runtime = require('./ro/runtime.cjs');
 const {read, save, local, hash} = runtime;
 const {loadTarget, programId, required} = require('../shared/target.cjs');
 const target = loadTarget();
+// PROCESS-ESCAPE-PLAN stage A (opt-in): per-boot launch title override.
+const launchTitle = () => process.env.NS2_LAUNCH_TITLE || programId(target);
 const check = (ok, message) => {if (!ok) throw Error(message);};
 
 async function main() {
@@ -56,6 +58,11 @@ async function main() {
     await stage('Remove exploit scratch from prior launches', () => require('./cleanup-scratch.cjs').main());
     const app = await script('app', 'qualify');
     check(app.verified && app.cleanedUp, 'Application worker qualification failed');
+    if (process.env.NS2_APP_SD_PROBE === '1') {
+      // Diagnostic only: a probe failure must never abort an otherwise good chain.
+      try {record.appSdProbeEarly = await script('app', 'sd-probe', ['early']);}
+      catch (error) {record.appSdProbeEarly = {error: error.message};}
+    }
     console.log('2/4 Acquiring FS memory');
     await stage('FS read, write and restoration', async () => {
       acquisition = await require('./acquire.cjs').start();
@@ -81,7 +88,7 @@ async function main() {
       const monitor = await memory.request({command: 'root-native-sm-service', handle: sm.export.handle, name: 'pm:dmnt'});
       check(!monitor.result && !monitor.transport, 'PM monitor did not open');
       const loader = await read(local(a.session, '-loader-root-copy.json'));
-      const code = await memory.request({command: 'root-native-code-open', handle: loader.copy.handle, title: programId(target)});
+      const code = await memory.request({command: 'root-native-code-open', handle: loader.copy.handle, title: launchTitle()});
       check(!code.result, 'Native RO CodeFS did not open');
       for (const name of ['main.npdm', 'main'])
         await memory.request({command: 'root-native-file-capture', handle: code.handle, name});
@@ -95,6 +102,30 @@ async function main() {
     check(gate.verified && gate.restored, 'The native request gate did not qualify');
     const launch = await script('ro', 'launch', [], 300000);
     check(launch.imageAccepted && launch.restored && launch.pid, 'PM did not accept the payload');
+    // PROCESS-ESCAPE-PLAN stage A (opt-in, NS2_LAUNCH_EXPERIMENT=1): observe the new
+    // process identity and stop BEFORE runtime.activate. No original process is
+    // terminated and Loader objects stay swapped; a console reboot is required after.
+    if (process.env.NS2_LAUNCH_EXPERIMENT === '1') {
+      record.experiment = await stage('Launch experiment (observe, never terminate)', async () => {
+        const memory = await connect();
+        const info = await memory.request({command: 'root-native-info'});
+        const monitor = info.services?.find(x => x.name === 'pm:dmnt')?.handle;
+        check(monitor, 'PM monitor session is missing (experiment)');
+        const title = launchTitle();
+        const ipc = (id, hex) => memory.request({command: 'root-native-ipc', handle: monitor, id, hex});
+        const identity = await ipc(7, encodeU64(BigInt(launch.pid)).toString('hex'));
+        const identified = !identity.result && identity.hex &&
+          Buffer.from(identity.hex, 'hex').readBigUInt64LE() === BigInt(title);
+        const start = process.env.NS2_LAUNCH_START === '1'
+          ? await ipc(1, encodeU64(BigInt(launch.pid)).toString('hex')) : {skipped: 'NS2_LAUNCH_START!=1'};
+        return {title, pid: launch.pid, identity: {...identity, identified}, start,
+          note: 'PROCESS-ESCAPE-PLAN stage A: original processes are left untouched; console reboot required afterwards'};
+      });
+      record.verified = false;
+      await save(path.join(__dirname, 'experiment-current.json'),
+        {experiment: true, session: a.session, launch: launch.file, result: record.experiment, started: record.started});
+      return;
+    }
     const activation = await stage('Start RO payload', () => runtime.activate(launch.file));
     const proof = await stage('RO instruction challenges', () => runtime.probe(activation.pid));
     const handoff = await stage('Restore Loader session', () => runtime.handoff());
@@ -109,6 +140,12 @@ async function main() {
     check(mapping.verified && mapping.cleanup?.finished, 'Native process mapping did not qualify and clean up');
     const execution = await stage('FS instruction challenges', () => require('./process/fs-execute.cjs').main());
     check(execution.verified && execution.restored, 'FS execution or restoration did not verify');
+    if (process.env.NS2_APP_SD_PROBE === '1') {
+      // Second anchor test: the stock application process again, now after the
+      // RO payload restored the loader session (4/4). Diagnostic only.
+      try {record.appSdProbeLate = await script('app', 'sd-probe', ['late']);}
+      catch (error) {record.appSdProbeLate = {error: error.message};}
+    }
     if (dumpFirmware) {
       console.log('Firmware: beginning read-only system-program CodeFS capture');
       record.firmwareDump = await stage('Enumerate and capture installed system code',
